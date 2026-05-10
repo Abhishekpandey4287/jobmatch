@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -29,7 +30,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 // ─────────────────────────────────────────────────────────────────────────────
-// State + ViewModel
+// State
 // ─────────────────────────────────────────────────────────────────────────────
 
 data class ApplicationsUiState(
@@ -40,6 +41,10 @@ data class ApplicationsUiState(
     val hasMore: Boolean                = true,
 )
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ViewModel — fresh API call on every tab visit (ViewModel is nav-entry scoped)
+// ─────────────────────────────────────────────────────────────────────────────
+
 class ApplicationsViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow(ApplicationsUiState())
@@ -47,10 +52,9 @@ class ApplicationsViewModel : ViewModel() {
 
     private var currentPage = 0
 
-    init { load(reset = true) }
+    init { load(reset = true) }   // called every time the tab is opened
 
-    fun retry() = load(reset = true)
-
+    fun retry()        = load(reset = true)
     fun loadNextPage() {
         if (_uiState.value.isLoadingMore || !_uiState.value.hasMore) return
         load()
@@ -65,7 +69,7 @@ class ApplicationsViewModel : ViewModel() {
                 else       it.copy(isLoadingMore = true)
             }
 
-            AppDependencies.getMyApplicationsUseCase(currentPage)
+            AppDependencies.getMyApplicationsUseCase(page = currentPage)
                 .onSuccess { result ->
                     val all = if (reset) result.items
                     else _uiState.value.applications + result.items
@@ -102,7 +106,20 @@ fun MyApplicationsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("My Applications") })
+            TopAppBar(
+                title = {
+                    Column {
+                        Text("My Applications")
+                        if (state.applications.isNotEmpty()) {
+                            Text(
+                                text  = "${state.applications.size} application(s)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            )
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -116,17 +133,21 @@ fun MyApplicationsScreen(
                 )
 
                 state.applications.isEmpty() -> EmptyView(
-                    message  = "No applications yet. Start applying to jobs!",
+                    message  = "No applications yet.\nTap a job and hit Apply to get started!",
                     icon     = Icons.Outlined.Assignment,
                     modifier = Modifier.fillMaxSize(),
                 )
 
                 else -> LazyColumn(
-                    modifier        = Modifier.fillMaxSize(),
-                    contentPadding  = PaddingValues(16.dp),
+                    modifier            = Modifier.fillMaxSize(),
+                    contentPadding      = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    itemsIndexed(state.applications, key = { _, a -> a.id }) { index, app ->
+                    itemsIndexed(
+                        items = state.applications,
+                        key   = { _, a -> a.id },
+                    ) { index, app ->
+
                         ApplicationCard(app)
 
                         if (index >= state.applications.lastIndex - 2 && !state.isLoadingMore) {
@@ -136,7 +157,12 @@ fun MyApplicationsScreen(
 
                     if (state.isLoadingMore) {
                         item {
-                            LoadingView(modifier = Modifier.fillMaxWidth().padding(16.dp))
+                            Box(
+                                modifier         = Modifier.fillMaxWidth().padding(16.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                            }
                         }
                     }
                 }
@@ -159,11 +185,30 @@ private fun ApplicationCard(application: Application) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
 
+            // Header row: avatar + title + status badge
             Row(
                 modifier              = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment     = Alignment.Top,
             ) {
+                // Company initial avatar
+                Surface(
+                    shape    = RoundedCornerShape(10.dp),
+                    color    = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(42.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text       = application.company.firstOrNull()?.toString() ?: "?",
+                            style      = MaterialTheme.typography.titleMedium,
+                            color      = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.width(12.dp))
+
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text       = application.jobTitle,
@@ -176,23 +221,35 @@ private fun ApplicationCard(application: Application) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+
                 Spacer(Modifier.width(8.dp))
                 StatusBadge(application.status)
             }
 
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(10.dp))
 
-            Text(
-                text  = application.statusDisplayName,
-                style = MaterialTheme.typography.bodySmall,
-                color = statusColor(application.status),
-                fontWeight = FontWeight.Medium,
-            )
+            // Status line with icon
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector        = statusIcon(application.status),
+                    contentDescription = null,
+                    modifier           = Modifier.size(14.dp),
+                    tint               = statusForeground(application.status),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text       = application.statusDisplayName,
+                    style      = MaterialTheme.typography.bodySmall,
+                    color      = statusForeground(application.status),
+                    fontWeight = FontWeight.Medium,
+                )
+            }
 
             Spacer(Modifier.height(4.dp))
-
             Text(
-                text  = "Applied ${application.appliedAt}",
+                text  = "Applied on ${application.appliedAt.take(10)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -213,24 +270,33 @@ private fun StatusBadge(status: ApplicationStatus) {
     }
 }
 
+private fun statusIcon(status: ApplicationStatus): ImageVector = when (status) {
+    ApplicationStatus.HIRED       -> Icons.Outlined.EmojiEvents
+    ApplicationStatus.SHORTLISTED -> Icons.Outlined.ThumbUp
+    ApplicationStatus.REJECTED    -> Icons.Outlined.Cancel
+    ApplicationStatus.VIEWED      -> Icons.Outlined.Visibility
+    ApplicationStatus.APPLIED     -> Icons.Outlined.Schedule
+}
+
 @Composable
-private fun statusColor(status: ApplicationStatus): Color = when (status) {
+private fun statusForeground(status: ApplicationStatus): Color = when (status) {
     ApplicationStatus.HIRED       -> MaterialTheme.colorScheme.tertiary
     ApplicationStatus.SHORTLISTED -> MaterialTheme.colorScheme.primary
     ApplicationStatus.REJECTED    -> MaterialTheme.colorScheme.error
-    else                          -> MaterialTheme.colorScheme.onSurfaceVariant
+    ApplicationStatus.VIEWED      -> MaterialTheme.colorScheme.secondary
+    ApplicationStatus.APPLIED     -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 @Composable
 private fun statusColors(status: ApplicationStatus): Pair<Color, Color> = when (status) {
-    ApplicationStatus.HIRED       ->
+    ApplicationStatus.HIRED ->
         MaterialTheme.colorScheme.tertiaryContainer  to MaterialTheme.colorScheme.onTertiaryContainer
     ApplicationStatus.SHORTLISTED ->
         MaterialTheme.colorScheme.primaryContainer   to MaterialTheme.colorScheme.onPrimaryContainer
-    ApplicationStatus.REJECTED    ->
+    ApplicationStatus.REJECTED ->
         MaterialTheme.colorScheme.errorContainer     to MaterialTheme.colorScheme.onErrorContainer
-    ApplicationStatus.VIEWED      ->
+    ApplicationStatus.VIEWED ->
         MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-    else                          ->
+    ApplicationStatus.APPLIED ->
         MaterialTheme.colorScheme.surfaceVariant     to MaterialTheme.colorScheme.onSurfaceVariant
 }

@@ -16,22 +16,25 @@ import com.jobmatch.presentation.auth.OtpScreen
 import com.jobmatch.presentation.auth.PhoneScreen
 import com.jobmatch.presentation.jobs.JobDetailScreen
 import com.jobmatch.presentation.jobs.JobFeedScreen
-import com.jobmatch.presentation.profile.ProfileSetupScreen
-import kotlinx.coroutines.flow.map
+import com.jobmatch.presentation.profile.*
 
 
 object Routes {
     const val PHONE         = "phone"
     const val OTP           = "otp/{phone}"
-    const val PROFILE_SETUP = "profile_setup"
+    const val PROFILE_SETUP = "profile_setup"  // shown ONCE after first login
     const val JOB_FEED      = "jobs"
     const val JOB_DETAIL    = "jobs/{jobId}"
     const val APPLICATIONS  = "applications"
+    const val PROFILE       = "profile"        // editable profile tab
 
-    fun otp(phone: String)       = "otp/$phone"
-    fun jobDetail(jobId: Long)   = "jobs/$jobId"
+    fun otp(phone: String)     = "otp/$phone"
+    fun jobDetail(jobId: Long) = "jobs/$jobId"
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom nav — only visible inside the main app (after auth + profile done)
+// ─────────────────────────────────────────────────────────────────────────────
 
 private enum class BottomTab(
     val route: String,
@@ -45,30 +48,37 @@ private enum class BottomTab(
         selectedIcon   = Icons.Filled.Work,
         unselectedIcon = Icons.Outlined.Work,
     ),
-    APPLICATIONS(
+    APPLIED(
         route          = Routes.APPLICATIONS,
         label          = "Applied",
         selectedIcon   = Icons.Filled.Assignment,
         unselectedIcon = Icons.Outlined.Assignment,
     ),
+    PROFILE(
+        route          = Routes.PROFILE,
+        label          = "Profile",
+        selectedIcon   = Icons.Filled.Person,
+        unselectedIcon = Icons.Outlined.Person,
+    ),
 }
 
-private val bottomNavRoutes = setOf(Routes.JOB_FEED, Routes.APPLICATIONS)
+private val bottomNavRoutes = setOf(
+    Routes.JOB_FEED,
+    Routes.APPLICATIONS,
+    Routes.PROFILE,
+)
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Root nav host
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun JobMatchNavHost() {
     val navController  = rememberNavController()
     val sessionManager = AppDependencies.sessionManager
 
-    /**
-     * Start destination logic:
-     *  - No token           → Phone (login)
-     *  - Token + no profile → ProfileSetup  (user logged in before but never completed profile)
-     *  - Token + profile    → JobFeed
-     *
-     * We use "phone" as safe initial value while the DataStore read resolves.
-     */
+    //  Resolve start destination from persisted token.
+    //  null = still loading (show nothing to avoid flash of wrong screen)
     var startDestination by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
@@ -79,12 +89,11 @@ fun JobMatchNavHost() {
         }
     }
 
-    // Show nothing until we know the start destination (avoids flash of wrong screen)
-    if (startDestination == null) return
+    if (startDestination == null) return   // splash / loading moment
 
     val currentBackStack by navController.currentBackStackEntryAsState()
-    val currentRoute = currentBackStack?.destination?.route
-    val showBottomBar = currentRoute in bottomNavRoutes
+    val currentRoute      = currentBackStack?.destination?.route
+    val showBottomBar     = currentRoute in bottomNavRoutes
 
     Scaffold(
         bottomBar = {
@@ -103,7 +112,7 @@ fun JobMatchNavHost() {
                             },
                             icon  = {
                                 Icon(
-                                    if (selected) tab.selectedIcon else tab.unselectedIcon,
+                                    imageVector        = if (selected) tab.selectedIcon else tab.unselectedIcon,
                                     contentDescription = tab.label,
                                 )
                             },
@@ -121,6 +130,7 @@ fun JobMatchNavHost() {
             modifier         = Modifier.padding(innerPadding),
         ) {
 
+            // ── STEP 1 ── Phone number entry ──────────────────────────────────
             composable(Routes.PHONE) {
                 PhoneScreen(
                     onOtpSent = { phone ->
@@ -129,19 +139,22 @@ fun JobMatchNavHost() {
                 )
             }
 
+            // ── STEP 2 ── OTP verification ────────────────────────────────────
             composable(
                 route     = Routes.OTP,
                 arguments = listOf(navArgument("phone") { type = NavType.StringType }),
-            ) { backStack ->
-                val phone = backStack.arguments?.getString("phone") ?: ""
+            ) { back ->
+                val phone = back.arguments?.getString("phone") ?: ""
                 OtpScreen(
                     phone      = phone,
                     onVerified = { isNewUser ->
                         if (isNewUser) {
+                            // Profile not complete → force profile setup
                             navController.navigate(Routes.PROFILE_SETUP) {
                                 popUpTo(Routes.PHONE) { inclusive = true }
                             }
                         } else {
+                            // Returning user with complete profile → straight to jobs
                             navController.navigate(Routes.JOB_FEED) {
                                 popUpTo(Routes.PHONE) { inclusive = true }
                             }
@@ -151,9 +164,11 @@ fun JobMatchNavHost() {
                 )
             }
 
+            // ── STEP 3 ── Profile setup (FIRST TIME ONLY, no back button) ─────
             composable(Routes.PROFILE_SETUP) {
                 ProfileSetupScreen(
                     onComplete = {
+                        // Profile saved → now show job feed for the first time
                         navController.navigate(Routes.JOB_FEED) {
                             popUpTo(Routes.PROFILE_SETUP) { inclusive = true }
                         }
@@ -161,6 +176,7 @@ fun JobMatchNavHost() {
                 )
             }
 
+            // ── STEP 4 ── Job feed (scrollable, infinite scroll, real-time) ───
             composable(Routes.JOB_FEED) {
                 JobFeedScreen(
                     onJobClick = { jobId ->
@@ -169,19 +185,32 @@ fun JobMatchNavHost() {
                 )
             }
 
+            // ── STEP 5 ── Job detail + Apply button ───────────────────────────
             composable(
                 route     = Routes.JOB_DETAIL,
                 arguments = listOf(navArgument("jobId") { type = NavType.LongType }),
-            ) { backStack ->
-                val jobId = backStack.arguments?.getLong("jobId") ?: 0L
+            ) { back ->
+                val jobId = back.arguments?.getLong("jobId") ?: 0L
                 JobDetailScreen(
                     jobId  = jobId,
                     onBack = { navController.popBackStack() },
                 )
             }
 
+            // ── TAB 2 ── My applications (calls API on every visit) ────────────
             composable(Routes.APPLICATIONS) {
                 MyApplicationsScreen()
+            }
+
+            // ── TAB 3 ── Editable profile + logout ────────────────────────────
+            composable(Routes.PROFILE) {
+                ProfileEditScreen(
+                    onLogout = {
+                        navController.navigate(Routes.PHONE) {
+                            popUpTo(0) { inclusive = true }   // clear entire back stack
+                        }
+                    }
+                )
             }
         }
     }
