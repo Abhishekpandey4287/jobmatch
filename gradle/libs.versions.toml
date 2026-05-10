@@ -1,0 +1,43 @@
+[versions]
+agp                = "8.5.2"
+kotlin             = "2.1.21"
+ktor               = "2.3.12"
+coroutines         = "1.8.1"
+serialization      = "1.7.3"
+activity-compose   = "1.9.2"
+krossbow           = "5.7.0"
+lifecycle          = "2.8.4"
+navigation         = "2.8.0-alpha10"
+datastore          = "1.1.1"
+datetime           = "0.6.1"
+
+[libraries]
+compose-ui-tooling               = { group = "androidx.compose.ui",              name = "ui-tooling" }
+activity-compose                 = { group = "androidx.activity",                name = "activity-compose",                  version.ref = "activity-compose" }
+coroutines-core                  = { group = "org.jetbrains.kotlinx",            name = "kotlinx-coroutines-core",           version.ref = "coroutines" }
+coroutines-android               = { group = "org.jetbrains.kotlinx",            name = "kotlinx-coroutines-android",        version.ref = "coroutines" }
+androidx-lifecycle-viewmodel     = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel-compose",       version.ref = "lifecycle" }
+androidx-lifecycle-runtime       = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-runtime-compose",        version.ref = "lifecycle" }
+androidx-navigation-compose      = { group = "org.jetbrains.androidx.navigation",name = "navigation-compose",               version.ref = "navigation" }
+kotlinx-serialization-json       = { group = "org.jetbrains.kotlinx",            name = "kotlinx-serialization-json",       version.ref = "serialization" }
+androidx-datastore-preferences   = { group = "androidx.datastore",               name = "datastore-preferences",            version.ref = "datastore" }
+kotlinx-datetime                 = { group = "org.jetbrains.kotlinx",            name = "kotlinx-datetime",                 version.ref = "datetime" }
+ktor-client-core                 = { group = "io.ktor",                          name = "ktor-client-core",                 version.ref = "ktor" }
+ktor-client-android              = { group = "io.ktor",                          name = "ktor-client-android",              version.ref = "ktor" }
+ktor-client-darwin               = { group = "io.ktor",                          name = "ktor-client-darwin",               version.ref = "ktor" }
+ktor-client-content-negotiation  = { group = "io.ktor",                          name = "ktor-client-content-negotiation",  version.ref = "ktor" }
+ktor-client-logging              = { group = "io.ktor",                          name = "ktor-client-logging",              version.ref = "ktor" }
+ktor-client-auth                 = { group = "io.ktor",                          name = "ktor-client-auth",                 version.ref = "ktor" }
+ktor-serialization-kotlinx-json  = { group = "io.ktor",                          name = "ktor-serialization-kotlinx-json",  version.ref = "ktor" }
+ktor-client-websockets           = { group = "io.ktor",                          name = "ktor-client-websockets",           version.ref = "ktor" }
+krossbow-stomp-core              = { group = "org.hildan.krossbow",              name = "krossbow-stomp-core",              version.ref = "krossbow" }
+krossbow-websocket-ktor          = { group = "org.hildan.krossbow",              name = "krossbow-websocket-ktor",          version.ref = "krossbow" }
+krossbow-stomp-kxserialization   = { group = "org.hildan.krossbow",              name = "krossbow-stomp-kxserialization",  version.ref = "krossbow" }
+
+[plugins]
+androidApplication  = { id = "com.android.application",                    version.ref = "agp" }
+androidLibrary      = { id = "com.android.library",                        version.ref = "agp" }
+kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform",         version.ref = "kotlin" }
+composeMultiplatform = { id = "org.jetbrains.compose",                     version = "1.7.3" }
+composeCompiler     = { id = "org.jetbrains.kotlin.plugin.compose",        version.ref = "kotlin" }
+kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization",  version.ref = "kotlin" }
