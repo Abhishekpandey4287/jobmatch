@@ -14,7 +14,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -42,7 +45,7 @@ data class ApplicationsUiState(
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ViewModel — fresh API call on every tab visit (ViewModel is nav-entry scoped)
+// ViewModel
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ApplicationsViewModel : ViewModel() {
@@ -52,9 +55,17 @@ class ApplicationsViewModel : ViewModel() {
 
     private var currentPage = 0
 
-    init { load(reset = true) }   // called every time the tab is opened
+    init { load(reset = true) }
 
-    fun retry()        = load(reset = true)
+    fun retry() = load(reset = true)
+
+    /**
+     * Called every time the tab becomes visible (ON_RESUME).
+     * Always does a fresh reload so newly submitted applications appear
+     * immediately without restarting the app.
+     */
+    fun reloadFromStart() = load(reset = true)
+
     fun loadNextPage() {
         if (_uiState.value.isLoadingMore || !_uiState.value.hasMore) return
         load()
@@ -103,6 +114,22 @@ fun MyApplicationsScreen(
     vm: ApplicationsViewModel = viewModel { ApplicationsViewModel() },
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
+
+    // KEY FIX 2 — reload every time this tab comes into view.
+    // ON_RESUME fires when:
+    //   - user first opens the tab
+    //   - user switches back to this tab from another tab
+    //   - user returns from any screen on top of this one
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                vm.reloadFromStart()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         topBar = {
@@ -172,7 +199,7 @@ fun MyApplicationsScreen(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Application card
+// Card
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -185,13 +212,11 @@ private fun ApplicationCard(application: Application) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
 
-            // Header row: avatar + title + status badge
             Row(
                 modifier              = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment     = Alignment.Top,
             ) {
-                // Company initial avatar
                 Surface(
                     shape    = RoundedCornerShape(10.dp),
                     color    = MaterialTheme.colorScheme.primaryContainer,
@@ -230,7 +255,6 @@ private fun ApplicationCard(application: Application) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(10.dp))
 
-            // Status line with icon
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector        = statusIcon(application.status),
