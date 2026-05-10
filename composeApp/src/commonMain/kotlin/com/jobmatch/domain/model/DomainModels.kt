@@ -77,7 +77,7 @@ data class PageResult<T>(
  */
 @Serializable
 data class RealtimeEvent(
-    val type: String,                       // "NEW_JOB" | "STATUS_UPDATE"
+    val type: String,
     val jobId: Long?               = null,
     val applicationId: Long?       = null,
     val newStatus: String?         = null,

@@ -128,6 +128,7 @@ class ProfileEditViewModel : ViewModel() {
     fun logout(onDone: () -> Unit) {
         viewModelScope.launch {
             AppDependencies.sessionManager.clearSession()
+            AppDependencies.reset()
             onDone()
         }
     }

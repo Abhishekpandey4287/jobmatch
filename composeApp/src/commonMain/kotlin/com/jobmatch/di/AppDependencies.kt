@@ -9,74 +9,78 @@ import com.jobmatch.domain.repository.*
 import com.jobmatch.domain.usecase.*
 import kotlinx.coroutines.runBlocking
 
-/**
- * Manual dependency container — no reflection, no annotation processing.
- *
- * All dependencies are wired lazily so the object graph is built exactly once
- * on first access and never more.
- *
- * ─── How to swap the backend ───────────────────────────────────────────────
- * Change [BASE_URL] for a physical device or production server.
- * Android emulator: "http://10.0.2.2:8080/"
- * Local device on same Wi-Fi: "http://<your-machine-ip>:8080/"
- * Production: "https://api.yourapp.com/"
- */
 object AppDependencies {
 
-//    private const val BASE_URL = "http://10.0.2.2:8080/"
-    private const val BASE_URL = "\"http://192.168.0.101:8080/\""
-
-    // ── Session ───────────────────────────────────────────────────────────────
+    private const val BASE_URL = "http://192.168.0.101:8080/"
+    //    private const val BASE_URL = "http://10.0.2.2:8080/"
 
     val sessionManager: SessionManager by lazy {
         SessionManager(createDataStore())
     }
 
-    // ── Ktor client ───────────────────────────────────────────────────────────
+    private var _httpClient: io.ktor.client.HttpClient? = null
+    private var _apiService: JobMatchApiService? = null
 
-    private val httpClient by lazy {
-        createHttpClient(
-            baseUrl       = BASE_URL,
-            tokenProvider = {
-                // This lambda runs on an IO thread from Ktor's scheduler.
-                // runBlocking here does NOT block the main thread.
-                runBlocking { sessionManager.getToken() }
-            },
-        )
+    private val httpClient: io.ktor.client.HttpClient
+        get() {
+            if (_httpClient == null) {
+                _httpClient = createHttpClient(
+                    baseUrl = BASE_URL,
+                    tokenProvider = { runBlocking { sessionManager.getToken() } },
+                )
+            }
+            return _httpClient!!
+        }
+
+    private val apiService: JobMatchApiService
+        get() {
+            if (_apiService == null) {
+                _apiService = JobMatchApiService(httpClient)
+            }
+            return _apiService!!
+        }
+
+    // Repositories — always derived from the current apiService instance
+    val authRepository: AuthRepository
+        get() = AuthRepositoryImpl(apiService)
+
+    val userRepository: UserRepository
+        get() = UserRepositoryImpl(apiService)
+
+    val jobRepository: JobRepository
+        get() = JobRepositoryImpl(apiService)
+
+    val applicationRepository: ApplicationRepository
+        get() = ApplicationRepositoryImpl(apiService)
+
+    val sendOtpUseCase: SendOtpUseCase
+        get() = SendOtpUseCase(authRepository)
+
+    val verifyOtpUseCase: VerifyOtpUseCase
+        get() = VerifyOtpUseCase(authRepository)
+
+    val updateProfileUseCase: UpdateProfileUseCase
+        get() = UpdateProfileUseCase(userRepository)
+
+    val getProfileUseCase: GetProfileUseCase
+        get() = GetProfileUseCase(userRepository)
+
+    val listJobsUseCase: ListJobsUseCase
+        get() = ListJobsUseCase(jobRepository)
+
+    val getJobDetailUseCase: GetJobDetailUseCase
+        get() = GetJobDetailUseCase(jobRepository)
+
+    val applyToJobUseCase: ApplyToJobUseCase
+        get() = ApplyToJobUseCase(applicationRepository)
+
+    val getMyApplicationsUseCase: GetMyApplicationsUseCase
+        get() = GetMyApplicationsUseCase(applicationRepository)
+
+
+    fun reset() {
+        _httpClient?.close()
+        _httpClient = null
+        _apiService = null
     }
-
-    // ── API service ───────────────────────────────────────────────────────────
-
-    private val apiService: JobMatchApiService by lazy {
-        JobMatchApiService(httpClient)
-    }
-
-    // ── Repositories ──────────────────────────────────────────────────────────
-
-    val authRepository: AuthRepository by lazy {
-        AuthRepositoryImpl(apiService)
-    }
-
-    val userRepository: UserRepository by lazy {
-        UserRepositoryImpl(apiService)
-    }
-
-    val jobRepository: JobRepository by lazy {
-        JobRepositoryImpl(apiService)
-    }
-
-    val applicationRepository: ApplicationRepository by lazy {
-        ApplicationRepositoryImpl(apiService)
-    }
-
-    // ── Use cases ─────────────────────────────────────────────────────────────
-
-    val sendOtpUseCase           by lazy { SendOtpUseCase(authRepository) }
-    val verifyOtpUseCase         by lazy { VerifyOtpUseCase(authRepository) }
-    val updateProfileUseCase     by lazy { UpdateProfileUseCase(userRepository) }
-    val getProfileUseCase        by lazy { GetProfileUseCase(userRepository) }
-    val listJobsUseCase          by lazy { ListJobsUseCase(jobRepository) }
-    val getJobDetailUseCase      by lazy { GetJobDetailUseCase(jobRepository) }
-    val applyToJobUseCase        by lazy { ApplyToJobUseCase(applicationRepository) }
-    val getMyApplicationsUseCase by lazy { GetMyApplicationsUseCase(applicationRepository) }
 }
